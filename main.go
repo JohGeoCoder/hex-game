@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"fmt"
 	"log"
 	"net/http"
@@ -87,11 +89,13 @@ func messageProcessor(ctx context.Context, rdb *redis.Client) {
 	ch := pubsub.Channel()
 
 	for msg := range ch {
-		fmt.Println(msg.Channel, msg.Payload)
 
-		for _, _ = range connections {
-			//c.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
-			fmt.Println("Connection Process")
+		buf := bytes.NewBuffer([]byte(msg.Payload))
+		g := &gameMessage{}
+		_ = gob.NewDecoder(buf).Decode(g)
+
+		for _, c := range connections {
+			c.WriteMessage(websocket.TextMessage, g.Payload)
 		}
 	}
 }
@@ -104,12 +108,15 @@ func connectionListener(ctx context.Context, conn *websocket.Conn, redisClient *
 			return
 		}
 
-		gameMessage := gameMessage{
+		gameMessage := &gameMessage{
 			SocketMessageType: messageType,
 			GameMessageType:   "",
 			Payload:           p,
 		}
 
-		redisClient.Publish(ctx, "channel1", gameMessage)
+		var buf bytes.Buffer
+		gob.NewEncoder(&buf).Encode(gameMessage)
+
+		redisClient.Publish(ctx, "channel1", buf.Bytes())
 	}
 }
