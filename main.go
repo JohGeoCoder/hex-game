@@ -1,15 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -18,12 +16,24 @@ const (
 	serverPort = "5001"
 )
 
+var gauge int = 0
+
 var connections map[string]*websocket.Conn = make(map[string]*websocket.Conn)
+var playerMap map[string]player = map[string]player{}
 
 type gameMessage struct {
-	SocketMessageType int
-	GameMessageType   string
-	Payload           []byte
+	GameMessageType string `json:"gameMessageType"`
+	Payload         string `json:"payload"`
+}
+
+type gameState struct {
+	Players []player `json:"players"`
+}
+
+type player struct {
+	ID   string `json:"id"`
+	PosX int    `json:"posXHex"`
+	PosY int    `json:"posYHex"`
 }
 
 func main() {
@@ -73,9 +83,9 @@ func getWsEndpoint(ctx context.Context, redisClient *redis.Client) func(http.Res
 			fmt.Println(err.Error())
 		}
 
-		fmt.Println("Client Connected")
+		connID := r.URL.Query().Get("id")
 
-		connID := uuid.New().String()
+		fmt.Println("Client Connected")
 
 		connections[connID] = ws
 
@@ -89,34 +99,49 @@ func messageProcessor(ctx context.Context, rdb *redis.Client) {
 	ch := pubsub.Channel()
 
 	for msg := range ch {
+		//t := time.Now()
+		gm := &gameMessage{}
+		json.Unmarshal([]byte(msg.Payload), gm)
 
-		buf := bytes.NewBuffer([]byte(msg.Payload))
-		g := &gameMessage{}
-		_ = gob.NewDecoder(buf).Decode(g)
+		if gm.GameMessageType == "position" {
+			p := &player{}
+			json.Unmarshal([]byte(gm.Payload), p)
 
-		for _, c := range connections {
-			c.WriteMessage(websocket.TextMessage, g.Payload)
+			playerMap[p.ID] = *p
+
+			st := gameState{
+				Players: []player{},
+			}
+
+			for _, p := range playerMap {
+				st.Players = append(st.Players, p)
+			}
+
+			mBytes, _ := json.Marshal(st)
+
+			for _, c := range connections {
+				c.WriteMessage(websocket.TextMessage, mBytes)
+			}
 		}
+
+		//elapsed := time.Since(t)
+		//fmt.Println(elapsed)
+
+		gauge--
+		fmt.Println(gauge)
 	}
 }
 
 func connectionListener(ctx context.Context, conn *websocket.Conn, redisClient *redis.Client, connID string) {
 	for {
-		messageType, p, err := conn.ReadMessage()
+		_, p, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
-		gameMessage := &gameMessage{
-			SocketMessageType: messageType,
-			GameMessageType:   "",
-			Payload:           p,
-		}
-
-		var buf bytes.Buffer
-		gob.NewEncoder(&buf).Encode(gameMessage)
-
-		redisClient.Publish(ctx, "channel1", buf.Bytes())
+		redisClient.Publish(ctx, "channel1", p)
+		gauge++
+		fmt.Println(gauge)
 	}
 }

@@ -5,27 +5,28 @@ const offsetX = 50
 const offsetY = 50
 
 var mouseCanvasCoords = {
-    mouseCanvasX: 0,
-    mouseCanvasY: 0
+    posXCanvas: 0,
+    posYCanvas: 0
 }
 
 var localGameState = {
-    mouseHexX: 0,
-    mouseHexY: 0
+    id: '',
+    posXHex: 0,
+    posYHex: 0
 }
 
 var lastSentGameState = {
-    mouseHexX: -1,
-    mouseHexY: -1
+    posXHex: -1,
+    posYHex: -1
 }
 
 var gameStateFromServer = {
-    mouseHexX: 0,
-    mouseHexY: 0
+    players: []
 }
 
 function init() {
-    const ws = new WebSocket("ws://localhost:5001/ws")
+    localGameState.id = crypto.randomUUID()
+    const ws = new WebSocket(`ws://localhost:5001/ws?id=${localGameState.id}`)
 
     ws.onopen = (event) => {
         console.log("OPEN")
@@ -80,7 +81,10 @@ function drawGrid(canvasContext) {
 }
 
 function drawState(canvasContext, state) {
-    fillHexagon(canvasContext, hexCoordsToCanvas(state.mouseHexX, state.mouseHexY))
+    for (let i = 0; i < state.players.length; i++) {
+        const element = state.players[i];
+        fillHexagon(canvasContext, hexCoordsToCanvas(element.posXHex, element.posYHex))
+    }
 }
 
 function startCanvas() {
@@ -96,14 +100,15 @@ function beginLocalCanvasEventListeners() {
     canvas.addEventListener('mousemove', (e) => {
         mouseCanvasCoords = {
             ...mouseCanvasCoords,
-            mouseCanvasX: e.offsetX,
-            mouseCanvasY: e.offsetY
+            posXCanvas: e.offsetX,
+            posYCanvas: e.offsetY
         }
 
-        const [hexX, hexY] = canvasCoordsToHex(mouseCanvasCoords.mouseCanvasX, mouseCanvasCoords.mouseCanvasY)
+        const [hexX, hexY] = canvasCoordsToHex(mouseCanvasCoords.posXCanvas, mouseCanvasCoords.posYCanvas)
         localGameState = {
-            mouseHexX: hexX,
-            mouseHexY: hexY
+            ...localGameState,
+            posXHex: hexX,
+            posYHex: hexY
         }
     })
 }
@@ -159,7 +164,13 @@ function beginDrawTicker(canvasContext, freq) {
 function beginSendTicker(webSocket, freq) {
     setInterval(() => {
         if(!_.isEqual(localGameState, lastSentGameState)) {
-            webSocket.send(JSON.stringify(localGameState))
+
+            let gameMessage = {
+                gameMessageType: 'position',
+                payload: JSON.stringify(localGameState)
+            }
+
+            webSocket.send(JSON.stringify(gameMessage))
             lastSentGameState = localGameState
         }
     }, 1000 / freq)
