@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	"hexgridgame.com/config"
 	"hexgridgame.com/eventbuffer"
 	"hexgridgame.com/models"
 )
@@ -24,62 +25,66 @@ var playerMap map[string]models.Player = map[string]models.Player{}
 func main() {
 	ctx := context.Background()
 
+	//Start listening for event messages
 	buf := eventbuffer.NewRedisBuffer(ctx)
-	buf.StartProcessing(func(msg *redis.Message) error {
-		gm := &models.GameMessage{}
-		err := json.Unmarshal([]byte(msg.Payload), gm)
-		if err != nil {
-			return err
-		}
+	buf.StartProcessing(processMessageFunc)
 
-		if gm.GameMessageType == "position" {
-			p := &models.Player{}
-			err = json.Unmarshal([]byte(gm.Payload), p)
-			if err != nil {
-				return err
-			}
-
-			playerMap[p.ID] = *p
-
-			st := models.GameState{
-				Players: []models.Player{},
-			}
-
-			for _, p := range playerMap {
-				st.Players = append(st.Players, p)
-			}
-
-			mBytes, err := json.Marshal(st)
-			if err != nil {
-				return err
-			}
-
-			for _, c := range connections {
-				c.WriteMessage(websocket.TextMessage, mBytes)
-			}
-		}
-
-		return nil
-	})
-
+	// Set up HTTP and Socket routes
 	setupRoutes(ctx, buf)
 
-	address := fmt.Sprintf("%s:%s", serverHost, serverPort)
-	log.Printf("Listening on %s", address)
-	err := http.ListenAndServe(address, nil)
+	cfg := config.Get()
+
+	log.Printf("Listening on %s", cfg.ServerHost)
+	err := http.ListenAndServe(cfg.ServerHost, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
+func processMessageFunc(msg *redis.Message) error {
+	gm := &models.GameMessage{}
+	err := json.Unmarshal([]byte(msg.Payload), gm)
+	if err != nil {
+		return err
+	}
+
+	if gm.GameMessageType == "position" {
+		p := &models.Player{}
+		err = json.Unmarshal([]byte(gm.Payload), p)
+		if err != nil {
+			return err
+		}
+
+		playerMap[p.ID] = *p
+
+		st := models.GameState{
+			Players: []models.Player{},
+		}
+
+		for _, p := range playerMap {
+			st.Players = append(st.Players, p)
+		}
+
+		mBytes, err := json.Marshal(st)
+		if err != nil {
+			return err
+		}
+
+		for _, c := range connections {
+			c.WriteMessage(websocket.TextMessage, mBytes)
+		}
+	}
+
+	return nil
+}
+
 func setupRoutes(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
-	http.HandleFunc("/ws", getWsEndpoint(ctx, buf))
+	http.HandleFunc("/ws", getWsEndpointFunc(ctx, buf))
 }
 
-func getWsEndpoint(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) func(http.ResponseWriter, *http.Request) {
-
+func getWsEndpointFunc(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var upgrader = websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -90,7 +95,7 @@ func getWsEndpoint(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) f
 		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
 		//Upgrade connection to a WebSocket
-		ws, err := upgrader.Upgrade(w, r, nil)
+		wsConnection, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
@@ -99,20 +104,19 @@ func getWsEndpoint(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) f
 
 		fmt.Println("Client Connected")
 
-		connections[connID] = ws
+		connections[connID] = wsConnection
 
-		connectionListener(ctx, ws, buf, connID)
-	}
-}
+		// Start listening for messages from the socket connection
+		go func() {
+			for {
+				_, p, err := wsConnection.ReadMessage()
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
 
-func connectionListener(ctx context.Context, conn *websocket.Conn, buf eventbuffer.Buffer[redis.Message], connID string) {
-	for {
-		_, p, err := conn.ReadMessage()
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		buf.Publish(p)
+				buf.Publish(p)
+			}
+		}()
 	}
 }

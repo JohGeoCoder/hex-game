@@ -9,6 +9,7 @@ import (
 // Config values populated from Environment Variables
 // with defaults
 type Config struct {
+	ServerHost         string `env:"SERVER_HOST" envDefault:"localhost:5001"`
 	RedisPubSubChannel string `env:"REDIS_PUBSUB_CHANNEL" envDefault:"channel1"`
 	RedisAddress       string `env:"REDIS_ADDRESS" envDefault:"69.164.219.100:6379"`
 }
