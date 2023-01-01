@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	"hexgridgame.com/eventbuffer"
 	"hexgridgame.com/models"
 )
 
@@ -21,36 +22,63 @@ var connections map[string]*websocket.Conn = make(map[string]*websocket.Conn)
 var playerMap map[string]models.Player = map[string]models.Player{}
 
 func main() {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "69.164.219.100:6379",
-		Password: "",
-	})
-
 	ctx := context.Background()
 
-	err := rdb.Ping(ctx).Err()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	buf := eventbuffer.NewRedisBuffer(ctx)
+	buf.StartProcessing(func(msg *redis.Message) error {
+		gm := &models.GameMessage{}
+		err := json.Unmarshal([]byte(msg.Payload), gm)
+		if err != nil {
+			return err
+		}
 
-	setupRoutes(ctx, rdb)
-	go messageProcessor(ctx, rdb)
+		if gm.GameMessageType == "position" {
+			p := &models.Player{}
+			err = json.Unmarshal([]byte(gm.Payload), p)
+			if err != nil {
+				return err
+			}
+
+			playerMap[p.ID] = *p
+
+			st := models.GameState{
+				Players: []models.Player{},
+			}
+
+			for _, p := range playerMap {
+				st.Players = append(st.Players, p)
+			}
+
+			mBytes, err := json.Marshal(st)
+			if err != nil {
+				return err
+			}
+
+			for _, c := range connections {
+				c.WriteMessage(websocket.TextMessage, mBytes)
+			}
+		}
+
+		return nil
+	})
+
+	setupRoutes(ctx, buf)
 
 	address := fmt.Sprintf("%s:%s", serverHost, serverPort)
 	log.Printf("Listening on %s", address)
-	err = http.ListenAndServe(address, nil)
+	err := http.ListenAndServe(address, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func setupRoutes(ctx context.Context, redisClient *redis.Client) {
+func setupRoutes(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
-	http.HandleFunc("/ws", getWsEndpoint(ctx, redisClient))
+	http.HandleFunc("/ws", getWsEndpoint(ctx, buf))
 }
 
-func getWsEndpoint(ctx context.Context, redisClient *redis.Client) func(http.ResponseWriter, *http.Request) {
+func getWsEndpoint(ctx context.Context, buf eventbuffer.Buffer[redis.Message]) func(http.ResponseWriter, *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var upgrader = websocket.Upgrader{
@@ -73,43 +101,11 @@ func getWsEndpoint(ctx context.Context, redisClient *redis.Client) func(http.Res
 
 		connections[connID] = ws
 
-		connectionListener(ctx, ws, redisClient, connID)
+		connectionListener(ctx, ws, buf, connID)
 	}
 }
 
-func messageProcessor(ctx context.Context, rdb *redis.Client) {
-	pubsub := rdb.Subscribe(ctx, "channel1")
-
-	ch := pubsub.Channel()
-
-	for msg := range ch {
-		gm := &models.GameMessage{}
-		json.Unmarshal([]byte(msg.Payload), gm)
-
-		if gm.GameMessageType == "position" {
-			p := &models.Player{}
-			json.Unmarshal([]byte(gm.Payload), p)
-
-			playerMap[p.ID] = *p
-
-			st := models.GameState{
-				Players: []models.Player{},
-			}
-
-			for _, p := range playerMap {
-				st.Players = append(st.Players, p)
-			}
-
-			mBytes, _ := json.Marshal(st)
-
-			for _, c := range connections {
-				c.WriteMessage(websocket.TextMessage, mBytes)
-			}
-		}
-	}
-}
-
-func connectionListener(ctx context.Context, conn *websocket.Conn, redisClient *redis.Client, connID string) {
+func connectionListener(ctx context.Context, conn *websocket.Conn, buf eventbuffer.Buffer[redis.Message], connID string) {
 	for {
 		_, p, err := conn.ReadMessage()
 		if err != nil {
@@ -117,6 +113,6 @@ func connectionListener(ctx context.Context, conn *websocket.Conn, redisClient *
 			return
 		}
 
-		redisClient.Publish(ctx, "channel1", p)
+		buf.Publish(p)
 	}
 }
