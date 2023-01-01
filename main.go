@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	"hexgridgame.com/models"
 )
 
 const (
@@ -16,25 +17,8 @@ const (
 	serverPort = "5001"
 )
 
-var gauge int = 0
-
 var connections map[string]*websocket.Conn = make(map[string]*websocket.Conn)
-var playerMap map[string]player = map[string]player{}
-
-type gameMessage struct {
-	GameMessageType string `json:"gameMessageType"`
-	Payload         string `json:"payload"`
-}
-
-type gameState struct {
-	Players []player `json:"players"`
-}
-
-type player struct {
-	ID   string `json:"id"`
-	PosX int    `json:"posXHex"`
-	PosY int    `json:"posYHex"`
-}
+var playerMap map[string]models.Player = map[string]models.Player{}
 
 func main() {
 	rdb := redis.NewClient(&redis.Options{
@@ -99,18 +83,17 @@ func messageProcessor(ctx context.Context, rdb *redis.Client) {
 	ch := pubsub.Channel()
 
 	for msg := range ch {
-		//t := time.Now()
-		gm := &gameMessage{}
+		gm := &models.GameMessage{}
 		json.Unmarshal([]byte(msg.Payload), gm)
 
 		if gm.GameMessageType == "position" {
-			p := &player{}
+			p := &models.Player{}
 			json.Unmarshal([]byte(gm.Payload), p)
 
 			playerMap[p.ID] = *p
 
-			st := gameState{
-				Players: []player{},
+			st := models.GameState{
+				Players: []models.Player{},
 			}
 
 			for _, p := range playerMap {
@@ -123,12 +106,6 @@ func messageProcessor(ctx context.Context, rdb *redis.Client) {
 				c.WriteMessage(websocket.TextMessage, mBytes)
 			}
 		}
-
-		//elapsed := time.Since(t)
-		//fmt.Println(elapsed)
-
-		gauge--
-		fmt.Println(gauge)
 	}
 }
 
@@ -141,7 +118,5 @@ func connectionListener(ctx context.Context, conn *websocket.Conn, redisClient *
 		}
 
 		redisClient.Publish(ctx, "channel1", p)
-		gauge++
-		fmt.Println(gauge)
 	}
 }
