@@ -9,13 +9,13 @@ var mouseCanvasCoords = {
     posYCanvas: 0
 }
 
-var localGameState = {
+var playerState = {
     id: '',
     posXHex: 0,
     posYHex: 0
 }
 
-var lastSentGameState = {
+var lastSentPlayerState = {
     posXHex: -1,
     posYHex: -1
 }
@@ -25,8 +25,8 @@ var gameStateFromServer = {
 }
 
 function init() {
-    localGameState.id = crypto.randomUUID()
-    const ws = new WebSocket(`ws://localhost:5001/ws?id=${localGameState.id}`)
+    playerState.id = crypto.randomUUID()
+    const ws = new WebSocket(`ws://localhost:5001/ws?id=${playerState.id}`)
 
     ws.onopen = (event) => {
         console.log("OPEN")
@@ -38,7 +38,6 @@ function init() {
 
     ws.onmessage = (event) => {
         gameStateFromServer = JSON.parse(event.data)
-        console.log(gameStateFromServer)
     }
     
     ws.onerror = (event) => {
@@ -105,8 +104,8 @@ function beginLocalCanvasEventListeners() {
         }
 
         const [hexX, hexY] = canvasCoordsToHex(mouseCanvasCoords.posXCanvas, mouseCanvasCoords.posYCanvas)
-        localGameState = {
-            ...localGameState,
+        playerState = {
+            ...playerState,
             posXHex: hexX,
             posYHex: hexY
         }
@@ -163,15 +162,15 @@ function beginDrawTicker(canvasContext, freq) {
 
 function beginSendTicker(webSocket, freq) {
     setInterval(() => {
-        if(!_.isEqual(localGameState, lastSentGameState)) {
+        if(!_.isEqual(playerState, lastSentPlayerState)) {
 
             let gameMessage = {
-                gameMessageType: 'position',
-                payload: JSON.stringify(localGameState)
+                gameMessageType: 'playerstate',
+                payload: JSON.stringify(playerState)
             }
 
             webSocket.send(JSON.stringify(gameMessage))
-            lastSentGameState = localGameState
+            lastSentPlayerState = playerState
         }
     }, 1000 / freq)
 }

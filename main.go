@@ -41,17 +41,19 @@ func main() {
 	}
 }
 
-func processMessageFunc(msg *redis.Message) error {
+func processMessageFunc(msg *eventbuffer.MessageMeta) error {
 	gm := &models.GameMessage{}
-	err := json.Unmarshal([]byte(msg.Payload), gm)
+	err := json.Unmarshal(msg.Payload, gm)
 	if err != nil {
+		fmt.Println("Game Message unmarshal error")
 		return err
 	}
 
-	if gm.GameMessageType == "position" {
+	if gm.GameMessageType == "playerstate" {
 		p := &models.Player{}
-		err = json.Unmarshal([]byte(gm.Payload), p)
+		err := json.Unmarshal([]byte(gm.Payload), p)
 		if err != nil {
+			fmt.Println("Player State Unmarshal error", err)
 			return err
 		}
 
@@ -67,6 +69,7 @@ func processMessageFunc(msg *redis.Message) error {
 
 		mBytes, err := json.Marshal(st)
 		if err != nil {
+			fmt.Println("Game State marshal error", err)
 			return err
 		}
 
@@ -115,7 +118,11 @@ func getWsEndpointFunc(ctx context.Context, buf eventbuffer.Buffer[redis.Message
 					return
 				}
 
-				buf.Publish(p)
+				msg := &eventbuffer.MessageMeta{
+					Payload: p,
+				}
+
+				buf.Publish(msg)
 			}
 		}()
 	}

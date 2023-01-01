@@ -2,6 +2,8 @@ package eventbuffer
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/go-redis/redis/v8"
@@ -23,33 +25,55 @@ func (b *RedisBuffer) Channel() <-chan *redis.Message {
 
 // Ack acknowledges that the message has been
 // processed successfully
-func (b *RedisBuffer) Ack(msg *redis.Message) {
+func (b *RedisBuffer) Ack(msg *MessageMeta) {
 	return
 }
 
 // Nack puts the message back into the buffer. This is often
 // called when the message is not processed successfully
-func (b *RedisBuffer) Nack(msg *redis.Message) {
-	b.rdb.Publish(b.ctx, b.channelName, msg.Payload)
+func (b *RedisBuffer) Nack(msg *MessageMeta, err error) {
+
+	msg.AttemptCount++
+
+	if err != nil {
+		if msg.AttemptErrors == nil {
+			msg.AttemptErrors = []error{err}
+		} else {
+			msg.AttemptErrors = append(msg.AttemptErrors, err)
+		}
+	}
+
+	b.rdb.Publish(b.ctx, b.channelName, msg)
 }
 
 // Publish adds an item to the buffer
-func (b *RedisBuffer) Publish(item any) {
-	b.rdb.Publish(b.ctx, b.channelName, item)
+func (b *RedisBuffer) Publish(msg *MessageMeta) {
+	bytes, err := json.Marshal(msg)
+	if err != nil {
+		fmt.Println("Metadata marshal error", err)
+	}
+	b.rdb.Publish(b.ctx, b.channelName, bytes)
 }
 
 // StartProcessing begins listeng for and processing messages
 // as they come in through the buffer. The listener is started in
 // its own goroutine so it does not block the main thread.
-func (b *RedisBuffer) StartProcessing(f func(*redis.Message) error) {
+func (b *RedisBuffer) StartProcessing(f func(*MessageMeta) error) {
 	go func() {
 		for msg := range b.ch {
-			if err := f(msg); err != nil {
-				b.Nack(msg)
+			mm := &MessageMeta{}
+			err := json.Unmarshal([]byte(msg.Payload), mm)
+			if err != nil {
+				fmt.Println("Message Unmarshal Error", err)
 				return
 			}
 
-			b.Ack(msg)
+			if err := f(mm); err != nil {
+				b.Nack(mm, err)
+				return
+			}
+
+			b.Ack(mm)
 		}
 	}()
 }
