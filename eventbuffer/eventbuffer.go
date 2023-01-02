@@ -4,12 +4,11 @@ import "time"
 
 // Buffer is a generic interface that defines
 // the actions of an event buffer
-type Buffer[T any] interface {
-	Channel() <-chan *T
+type Buffer interface {
 	Ack(msg *MessageMeta)
 	Nack(msg *MessageMeta, err error)
 	Publish(item *MessageMeta)
-	StartProcessing(f func(msg *MessageMeta) error)
+	StartProcessing() <-chan *MessageMeta
 }
 
 type MessageMeta struct {

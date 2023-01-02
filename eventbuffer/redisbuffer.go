@@ -18,11 +18,6 @@ type RedisBuffer struct {
 	ch          <-chan *redis.Message
 }
 
-// Channel returns the buffer that feeds events
-func (b *RedisBuffer) Channel() <-chan *redis.Message {
-	return b.Channel()
-}
-
 // Ack acknowledges that the message has been
 // processed successfully
 func (b *RedisBuffer) Ack(msg *MessageMeta) {
@@ -55,10 +50,12 @@ func (b *RedisBuffer) Publish(msg *MessageMeta) {
 	b.rdb.Publish(b.ctx, b.channelName, bytes)
 }
 
-// StartProcessing begins listeng for and processing messages
+// StartProcessing begins listening for and processing messages
 // as they come in through the buffer. The listener is started in
 // its own goroutine so it does not block the main thread.
-func (b *RedisBuffer) StartProcessing(f func(*MessageMeta) error) {
+func (b *RedisBuffer) StartProcessing() <-chan *MessageMeta {
+	mmChan := make(chan *MessageMeta, 10)
+
 	go func() {
 		for msg := range b.ch {
 			mm := &MessageMeta{}
@@ -68,19 +65,16 @@ func (b *RedisBuffer) StartProcessing(f func(*MessageMeta) error) {
 				return
 			}
 
-			if err := f(mm); err != nil {
-				b.Nack(mm, err)
-				return
-			}
-
-			b.Ack(mm)
+			mmChan <- mm
 		}
 	}()
+
+	return mmChan
 }
 
 // NewRedisBuffer instantiates and returns a Redis
 // Pub Sub implementation as a buffer
-func NewRedisBuffer(ctx context.Context) Buffer[redis.Message] {
+func NewRedisBuffer(ctx context.Context) Buffer {
 	cfg := config.Get()
 
 	// Initialize Redis
