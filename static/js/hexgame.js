@@ -4,136 +4,210 @@ const r = 50
 const offsetX = 50
 const offsetY = 50
 
-var mouseCanvasCoords = {
-    posXCanvas: 0,
-    posYCanvas: 0
+class HexGame {
+    posEl = null
+    canvasEl = null
+    canvasContext = null
+    webSocket = null
+
+    canvasCoords = {
+        posXCanvas: 0,
+        posYCanvas: 0
+    }
+
+    playerState = {
+        id: '',
+        posXHex: 0,
+        posYHex: 0
+    }
+
+    lastSentPlayerState = {
+        posXHex: -1,
+        posYHex: -1
+    }
+
+    gameStateFromServer = {
+        players: []
+    }
+
+    constructor() {
+        this.posEl = document.getElementById('position')
+        this.playerState.id = crypto.randomUUID()
+
+        const canvas = document.getElementById('canvas')
+        this.canvasEl = canvas
+        this.canvasContext = canvas.getContext('2d')
+
+        const ws = new WebSocket(`ws://localhost:5001/ws?id=${this.playerState.id}`)
+        this.webSocket = ws
+
+        ws.onopen = () => {
+            this.beginLocalCanvasEventListeners()
+            this.beginSendTicker(120)
+        }
+
+        ws.onmessage = (event) => {
+            this.gameStateFromServer = JSON.parse(event.data)
+        }
+        
+        ws.onerror = (event) => {
+            console.log("ERROR")
+            console.log(event)
+        }
+        
+        ws.onclose = (event) => {
+            console.log("CLOSE")
+            console.log(event)
+        }
+    }
+
+    beginLocalCanvasEventListeners() {    
+        this.canvasEl.addEventListener('mousemove', (e) => {
+            this.mouseCanvasCoords = {
+                ...this.mouseCanvasCoords,
+                posXCanvas: e.offsetX,
+                posYCanvas: e.offsetY
+            }
+    
+            let canvasX = this.mouseCanvasCoords.posXCanvas
+            let canvasY = this.mouseCanvasCoords.posYCanvas
+            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY)
+            this.playerState = {
+                ...this.playerState,
+                posXHex: hexX,
+                posYHex: hexY
+            }
+        })
+    }
+
+    beginSendTicker(freq) {
+        setInterval(() => {
+            if(!_.isEqual(this.playerState, this.lastSentPlayerState)) {
+    
+                let gameMessage = {
+                    gameMessageType: 'playerstate',
+                    payload: JSON.stringify(this.playerState)
+                }
+    
+                this.webSocket.send(JSON.stringify(gameMessage))
+                this.lastSentPlayerState = this.playerState
+            }
+        }, 1000 / freq)
+    }
+
+    setPositionEl(x, y) {
+        this.posEl.textContent = `{${x},${y}}`
+    }
+
+    getGameState() {
+        return { ...this.gameStateFromServer }
+    }
+
+    getCanvasContext() {
+        return this.canvasContext
+    }
+
+    getThisPlayer() {
+        let pSearch = this.gameStateFromServer.players.filter(p => p.id === this.playerState.id)
+
+        if (pSearch.length === 0) {
+            return null
+        }
+
+        return pSearch[0]
+    }
 }
 
-var playerState = {
-    id: '',
-    posXHex: 0,
-    posYHex: 0
-}
+class GameDrawer {
+    hexGame = null
 
-var lastSentPlayerState = {
-    posXHex: -1,
-    posYHex: -1
-}
+    constructor(game) {
+        this.hexGame = game
+        this.beginDrawTicker(120)
+    }
 
-var gameStateFromServer = {
-    players: []
+    beginDrawTicker(freq) {
+        let canvasContext = this.hexGame.getCanvasContext()
+        setInterval(() => {
+            canvasContext.clearRect(0, 0, canvasContext.canvas.width, canvasContext.canvas.height)
+            this.drawGrid(canvasContext)
+
+            let gameState = this.hexGame.getGameState()
+            this.drawGameState(canvasContext, gameState)
+    
+
+            let thisPlayer = this.hexGame.getThisPlayer()
+            this.hexGame.setPositionEl(thisPlayer.posXHex, thisPlayer.posYHex)
+        }, 1000 / freq)
+    }
+
+    drawGameState() {
+        let state = this.hexGame.getGameState()
+        for (let i = 0; i < state.players.length; i++) {
+            const element = state.players[i];
+            this.fillHexagon(hexCoordsToCanvas(element.posXHex, element.posYHex))
+        }
+    }
+
+    drawGrid() {
+        for (let x = 0; x < 10; x++) {
+            for (let y = 0; y < 5; y++) {
+                this.drawHexagon(hexCoordsToCanvas(x, y))
+            } 
+        }
+        for (let x = 2; x < 10; x += 2) {
+            for (let y = (- x / 2); y < 0; y++) {
+                this.drawHexagon(hexCoordsToCanvas(x, y))
+            } 
+        }
+        for (let x = 3; x < 10; x += 2) {
+            for (let y = ((1 - x) / 2); y < 0; y++) {
+                this.drawHexagon(hexCoordsToCanvas(x, y))
+            } 
+        }
+        for (let x = 8; x >= 0; x -= 2) {
+            for (let y = (5 - (x - 8) / 2); y >= 5; y--) {
+                this.drawHexagon(hexCoordsToCanvas(x, y))
+            } 
+        }
+        for (let x = 7; x >= 0; x -= 2) {
+            for (let y = (5 - (1 + x - 8) / 2); y >= 5; y--) {
+                this.drawHexagon(hexCoordsToCanvas(x, y))
+            } 
+        }
+    }
+
+    drawHexagon(hexCoords) {
+        let canvasContext = this.hexGame.getCanvasContext()
+        const [hexX, hexY] = hexCoords
+    
+        canvasContext.beginPath()
+        for (var i = 0; i < 6; i++) {
+            canvasContext.lineTo(hexX + r * Math.cos(a * i), hexY + r * Math.sin(a * i));
+        }
+        canvasContext.closePath()
+        canvasContext.stroke()
+    }
+
+    fillHexagon(hexCoords) {
+        let canvasContext = this.hexGame.getCanvasContext()
+        const [hexX, hexY] = hexCoords
+    
+        canvasContext.fillStyle = '#AAA'
+    
+        canvasContext.beginPath()
+        for (var i = 0; i < 6; i++) {
+            canvasContext.lineTo(hexX + r * Math.cos(a * i), hexY + r * Math.sin(a * i));
+        }
+        canvasContext.fill()
+        canvasContext.closePath()
+    }
+    
 }
 
 function init() {
-    playerState.id = crypto.randomUUID()
-    const ws = new WebSocket(`ws://localhost:5001/ws?id=${playerState.id}`)
-
-    ws.onopen = (event) => {
-        console.log("OPEN")
-        beginLocalCanvasEventListeners()
-        let canvasContext = startCanvas()
-        beginDrawTicker(canvasContext, 120)
-        beginSendTicker(ws, 120)
-    }
-
-    ws.onmessage = (event) => {
-        gameStateFromServer = JSON.parse(event.data)
-    }
-    
-    ws.onerror = (event) => {
-        console.log("ERROR")
-        console.log(event)
-    }
-    
-    ws.onclose = (event) => {
-        console.log("CLOSE")
-        console.log(event)
-    }
-}
-
-function drawGrid(canvasContext) {
-    for (let x = 0; x < 10; x++) {
-        for (let y = 0; y < 5; y++) {
-            drawHexagon(canvasContext, hexCoordsToCanvas(x, y))
-        } 
-    }
-    for (let x = 2; x < 10; x += 2) {
-        for (let y = (- x / 2); y < 0; y++) {
-            drawHexagon(canvasContext, hexCoordsToCanvas(x, y))
-        } 
-    }
-    for (let x = 3; x < 10; x += 2) {
-        for (let y = ((1 - x) / 2); y < 0; y++) {
-            drawHexagon(canvasContext, hexCoordsToCanvas(x, y))
-        } 
-    }
-    for (let x = 8; x >= 0; x -= 2) {
-        for (let y = (5 - (x - 8) / 2); y >= 5; y--) {
-            drawHexagon(canvasContext, hexCoordsToCanvas(x, y))
-        } 
-    }
-    for (let x = 7; x >= 0; x -= 2) {
-        for (let y = (5 - (1 + x - 8) / 2); y >= 5; y--) {
-            drawHexagon(canvasContext, hexCoordsToCanvas(x, y))
-        } 
-    }
-}
-
-function drawState(canvasContext, state) {
-    for (let i = 0; i < state.players.length; i++) {
-        const element = state.players[i];
-        fillHexagon(canvasContext, hexCoordsToCanvas(element.posXHex, element.posYHex))
-    }
-}
-
-function startCanvas() {
-    const canvas = document.getElementById('canvas')
-    const ctx = canvas.getContext('2d')
-
-    return ctx
-}
-
-function beginLocalCanvasEventListeners() {
-    const canvas = document.getElementById('canvas')
-
-    canvas.addEventListener('mousemove', (e) => {
-        mouseCanvasCoords = {
-            ...mouseCanvasCoords,
-            posXCanvas: e.offsetX,
-            posYCanvas: e.offsetY
-        }
-
-        const [hexX, hexY] = canvasCoordsToHex(mouseCanvasCoords.posXCanvas, mouseCanvasCoords.posYCanvas)
-        playerState = {
-            ...playerState,
-            posXHex: hexX,
-            posYHex: hexY
-        }
-    })
-}
-
-function drawHexagon(ctx, hexCoords) {
-    const [hexX, hexY] = hexCoords
-
-    ctx.beginPath()
-    for (var i = 0; i < 6; i++) {
-        ctx.lineTo(hexX + r * Math.cos(a * i), hexY + r * Math.sin(a * i));
-    }
-    ctx.closePath()
-    ctx.stroke()
-}
-
-function fillHexagon(ctx, hexCoords) {
-    const [hexX, hexY] = hexCoords
-
-    ctx.fillStyle = '#AAA'
-
-    ctx.beginPath()
-    for (var i = 0; i < 6; i++) {
-        ctx.lineTo(hexX + r * Math.cos(a * i), hexY + r * Math.sin(a * i));
-    }
-    ctx.fill()
-    ctx.closePath()
+    Game = new HexGame()
+    GameDrawer = new GameDrawer(Game)
 }
 
 function hexCoordsToCanvas(hexX, hexY) {
@@ -150,29 +224,6 @@ function canvasCoordsToHex(canvasX, canvasY) {
     hexY = Math.round(hexY)
 
     return [hexX, hexY]
-}
-
-function beginDrawTicker(canvasContext, freq) {
-    setInterval(() => {
-        canvasContext.clearRect(0, 0, canvasContext.canvas.width, canvasContext.canvas.height)
-        drawGrid(canvasContext)
-        drawState(canvasContext, { ...gameStateFromServer })
-    }, 1000 / freq)
-}
-
-function beginSendTicker(webSocket, freq) {
-    setInterval(() => {
-        if(!_.isEqual(playerState, lastSentPlayerState)) {
-
-            let gameMessage = {
-                gameMessageType: 'playerstate',
-                payload: JSON.stringify(playerState)
-            }
-
-            webSocket.send(JSON.stringify(gameMessage))
-            lastSentPlayerState = playerState
-        }
-    }, 1000 / freq)
 }
 
 init()
