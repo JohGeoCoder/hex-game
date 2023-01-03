@@ -23,7 +23,7 @@ func main() {
 	ctx := context.Background()
 
 	//Start listening for event messages
-	buf := eventbuffer.NewRedisBuffer(ctx)
+	buf := eventbuffer.NewQueueBuffer()
 	buf.StartProcessing()
 
 	game := gamedata.NewGame(buf)

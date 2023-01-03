@@ -7,7 +7,7 @@ import "time"
 type Buffer interface {
 	Ack(msg *MessageMeta)
 	Nack(msg *MessageMeta, err error)
-	Publish(item *MessageMeta)
+	Publish(msg *MessageMeta)
 	StartProcessing() <-chan *MessageMeta
 }
 
