@@ -10,22 +10,29 @@ class HexGame {
     canvasContext = null
     webSocket = null
 
+    // Mouse X,Y coordinates on the HTML canvas
     canvasCoords = {
         posXCanvas: 0,
         posYCanvas: 0
     }
 
+    // This player data. Coordinates in Hex
     playerState = {
         id: '',
         posXHex: 0,
         posYHex: 0
     }
 
+    // The last state of this player sent to the server.
+    // This aids an optimization to minimize the number
+    // of state updates sent to the server.
     lastSentPlayerState = {
         posXHex: -1,
         posYHex: -1
     }
 
+    // All the relevant game data sent from the server.
+    // This gets regularly updated from the socket connection.
     gameStateFromServer = {
         players: []
     }
