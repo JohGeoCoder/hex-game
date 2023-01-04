@@ -45,8 +45,8 @@ class HexGame {
         this.canvasEl = canvas
         this.canvasContext = canvas.getContext('2d')
 
-        this.offsetX = 50
-        this.offsetY = 50
+        this.offsetX = (canvas.offsetWidth - r) / 2
+        this.offsetY = (canvas.offsetHeight - r) / 2
 
         const ws = new WebSocket(`ws://localhost:5001/ws?id=${this.playerState.id}`)
         this.webSocket = ws
@@ -119,12 +119,11 @@ class HexGame {
 
     getThisPlayer() {
         let pSearch = this.gameStateFromServer.players.filter(p => p.id === this.playerState.id)
-
-        if (pSearch.length === 0) {
-            return null
+        if (pSearch.length) {
+            return pSearch[0]
         }
 
-        return pSearch[0]
+        return null
     }
 
     getOffset() {
@@ -168,31 +167,95 @@ class GameDrawer {
     drawGrid() {
         const [offsetX, offsetY] = this.hexGame.getOffset()
 
-        for (let x = 0; x < 10; x++) {
-            for (let y = 0; y < 5; y++) {
-                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
-            } 
+        // for (let i = -3; i <= 3; i++) {
+        //     for (let j = -3; j <= 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(i, j, offsetX, offsetY))
+        //     }
+        //     this.drawHexagon(hexCoordsToCanvas(0, i, offsetX, offsetY))
+        // }
+
+        for (let i = -4; i <=4; i++) {
+            this.drawHexagon(hexCoordsToCanvas(0, i, offsetX, offsetY))
+            this.drawHexagon(hexCoordsToCanvas(i, 0, offsetX, offsetY))
+            this.drawHexagon(hexCoordsToCanvas(i, -i, offsetX, offsetY))
         }
-        for (let x = 2; x < 10; x += 2) {
-            for (let y = (- x / 2); y < 0; y++) {
-                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
-            } 
+
+        for (let i = 0; i < 3; i++) {
+            for (let j = i; j < 3; j++) {
+                let x = -1
+                let y = 2
+                this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
+
+                x = 1
+                y = 1
+                this.drawHexagon(hexCoordsToCanvas(2 + x - j, y + i, offsetX, offsetY))
+
+                x = 2
+                y = -1
+                this.drawHexagon(hexCoordsToCanvas(x + j, y - i, offsetX, offsetY))
+
+                x = 1
+                y = -2
+                this.drawHexagon(hexCoordsToCanvas(x + i, y - j, offsetX, offsetY))
+
+                x = -1
+                y = -1
+                this.drawHexagon(hexCoordsToCanvas(x - i, y + j - 2, offsetX, offsetY))
+
+                x = -2
+                y = 1
+                this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
+            }
         }
-        for (let x = 3; x < 10; x += 2) {
-            for (let y = ((1 - x) / 2); y < 0; y++) {
-                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
-            } 
-        }
-        for (let x = 8; x >= 0; x -= 2) {
-            for (let y = (5 - (x - 8) / 2); y >= 5; y--) {
-                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
-            } 
-        }
-        for (let x = 7; x >= 0; x -= 2) {
-            for (let y = (5 - (1 + x - 8) / 2); y >= 5; y--) {
-                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
-            } 
-        }
+
+
+        // let x = -1
+        // let y = 2
+        // for (let i = 0; i < 3; i++) {
+        //     for (let j = i; j < 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
+        //     }
+        // }
+
+        // x = 4
+        // y = -3
+        // for (let i = 0; i < 3; i++) {
+        //     for (let j = i; j < 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
+        //     }
+        // }
+
+        // x = -1
+        // y = -3
+        // for (let i = 0; i < 3; i++) {
+        //     for (let j = i; j < 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
+        //     }
+        // }
+
+        // x = -2
+        // y = 1
+        // for (let i = 0; i < 3; i++) {
+        //     for (let j = i; j < 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
+        //     }
+        // }
+
+        // x = 3
+        // y = -4
+        // for (let i = 0; i < 3; i++) {
+        //     for (let j = i; j < 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
+        //     }
+        // }
+
+        // x = 3
+        // y = 1
+        // for (let i = 0; i < 3; i++) {
+        //     for (let j = i; j < 3; j++) {
+        //         this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
+        //     }
+        // }
     }
 
     drawHexagon(hexCoords) {
