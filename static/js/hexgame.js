@@ -1,14 +1,14 @@
 
 const a = 2 * Math.PI / 6
 const r = 50
-const offsetX = 50
-const offsetY = 50
 
 class HexGame {
     posEl = null
     canvasEl = null
     canvasContext = null
     webSocket = null
+    offsetX = 0
+    offsetY = 0
 
     // Mouse X,Y coordinates on the HTML canvas
     canvasCoords = {
@@ -45,6 +45,9 @@ class HexGame {
         this.canvasEl = canvas
         this.canvasContext = canvas.getContext('2d')
 
+        this.offsetX = 50
+        this.offsetY = 50
+
         const ws = new WebSocket(`ws://localhost:5001/ws?id=${this.playerState.id}`)
         this.webSocket = ws
 
@@ -78,7 +81,7 @@ class HexGame {
     
             let canvasX = this.mouseCanvasCoords.posXCanvas
             let canvasY = this.mouseCanvasCoords.posYCanvas
-            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY)
+            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, this.offsetX, this.offsetY)
             this.playerState = {
                 ...this.playerState,
                 posXHex: hexX,
@@ -123,6 +126,10 @@ class HexGame {
 
         return pSearch[0]
     }
+
+    getOffset() {
+        return [this.offsetX, this.offsetY]
+    }
 }
 
 class GameDrawer {
@@ -142,44 +149,48 @@ class GameDrawer {
             let gameState = this.hexGame.getGameState()
             this.drawGameState(canvasContext, gameState)
     
-
             let thisPlayer = this.hexGame.getThisPlayer()
-            this.hexGame.setPositionEl(thisPlayer.posXHex, thisPlayer.posYHex)
+            if (thisPlayer) {
+                this.hexGame.setPositionEl(thisPlayer.posXHex, thisPlayer.posYHex)
+            }
         }, 1000 / freq)
     }
 
     drawGameState() {
+        const [offsetX, offsetY] = this.hexGame.getOffset()
         let state = this.hexGame.getGameState()
         for (let i = 0; i < state.players.length; i++) {
             const element = state.players[i];
-            this.fillHexagon(hexCoordsToCanvas(element.posXHex, element.posYHex))
+            this.fillHexagon(hexCoordsToCanvas(element.posXHex, element.posYHex, offsetX, offsetY))
         }
     }
 
     drawGrid() {
+        const [offsetX, offsetY] = this.hexGame.getOffset()
+
         for (let x = 0; x < 10; x++) {
             for (let y = 0; y < 5; y++) {
-                this.drawHexagon(hexCoordsToCanvas(x, y))
+                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
             } 
         }
         for (let x = 2; x < 10; x += 2) {
             for (let y = (- x / 2); y < 0; y++) {
-                this.drawHexagon(hexCoordsToCanvas(x, y))
+                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
             } 
         }
         for (let x = 3; x < 10; x += 2) {
             for (let y = ((1 - x) / 2); y < 0; y++) {
-                this.drawHexagon(hexCoordsToCanvas(x, y))
+                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
             } 
         }
         for (let x = 8; x >= 0; x -= 2) {
             for (let y = (5 - (x - 8) / 2); y >= 5; y--) {
-                this.drawHexagon(hexCoordsToCanvas(x, y))
+                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
             } 
         }
         for (let x = 7; x >= 0; x -= 2) {
             for (let y = (5 - (1 + x - 8) / 2); y >= 5; y--) {
-                this.drawHexagon(hexCoordsToCanvas(x, y))
+                this.drawHexagon(hexCoordsToCanvas(x, y, offsetX, offsetY))
             } 
         }
     }
@@ -217,13 +228,13 @@ function init() {
     GameDrawer = new GameDrawer(Game)
 }
 
-function hexCoordsToCanvas(hexX, hexY) {
+function hexCoordsToCanvas(hexX, hexY, offsetX, offsetY) {
     let canvasX = offsetX + (r * hexX) * (1 + Math.cos(a))
     let canvasY = offsetY + (r * hexX * Math.sin(a)) + (2 * hexY * r * Math.sin(a))
     return [canvasX, canvasY]
 }
 
-function canvasCoordsToHex(canvasX, canvasY) {
+function canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY) {
     let hexX = (canvasX - offsetX) / (r * (1 + Math.cos(a)))
     let hexY = (canvasY - offsetY - (r * hexX * Math.sin(a))) / (2 * r * Math.sin(a))
 
