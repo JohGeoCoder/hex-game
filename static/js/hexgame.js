@@ -167,95 +167,68 @@ class GameDrawer {
     drawGrid() {
         const [offsetX, offsetY] = this.hexGame.getOffset()
 
-        // for (let i = -3; i <= 3; i++) {
-        //     for (let j = -3; j <= 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(i, j, offsetX, offsetY))
-        //     }
-        //     this.drawHexagon(hexCoordsToCanvas(0, i, offsetX, offsetY))
-        // }
+        let clusterRadius = 5
 
-        for (let i = -4; i <=4; i++) {
+        // Draw the hexagon cluster cross lines
+        for (let i = -clusterRadius + 1; i < clusterRadius; i++) {
             this.drawHexagon(hexCoordsToCanvas(0, i, offsetX, offsetY))
             this.drawHexagon(hexCoordsToCanvas(i, 0, offsetX, offsetY))
             this.drawHexagon(hexCoordsToCanvas(i, -i, offsetX, offsetY))
         }
 
-        for (let i = 0; i < 3; i++) {
-            for (let j = i; j < 3; j++) {
-                let x = -1
-                let y = 2
+        // Draw the southwest border triangle
+        let x = -1
+        let y = 2
+        for (let i = 0; i < clusterRadius - 2; i++) {
+            for (let j = i; j < clusterRadius - 2; j++) {
                 this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
-
-                x = 1
-                y = 1
-                this.drawHexagon(hexCoordsToCanvas(2 + x - j, y + i, offsetX, offsetY))
-
-                x = 2
-                y = -1
-                this.drawHexagon(hexCoordsToCanvas(x + j, y - i, offsetX, offsetY))
-
-                x = 1
-                y = -2
-                this.drawHexagon(hexCoordsToCanvas(x + i, y - j, offsetX, offsetY))
-
-                x = -1
-                y = -1
-                this.drawHexagon(hexCoordsToCanvas(x - i, y + j - 2, offsetX, offsetY))
-
-                x = -2
-                y = 1
-                this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
             }
         }
 
+        // Draw the southeast border triangle
+        x = 1
+        y = 1
+        for (let i = 0; i < clusterRadius - 2; i++) {
+            for (let j = i; j < clusterRadius - 2; j++) {
+                this.drawHexagon(hexCoordsToCanvas((clusterRadius - 3) + x - j, y + i, offsetX, offsetY))
+            }
+        }
 
-        // let x = -1
-        // let y = 2
-        // for (let i = 0; i < 3; i++) {
-        //     for (let j = i; j < 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
-        //     }
-        // }
+        // Draw the east border triangle
+        x = 2
+        y = -1
+        for (let i = 0; i < clusterRadius - 2; i++) {
+            for (let j = i; j < clusterRadius - 2; j++) {
+                this.drawHexagon(hexCoordsToCanvas(x + j, y - i, offsetX, offsetY))
+            }
+        }
 
-        // x = 4
-        // y = -3
-        // for (let i = 0; i < 3; i++) {
-        //     for (let j = i; j < 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
-        //     }
-        // }
+        // Draw the northeast border triangle
+        x = 1
+        y = -2
+        for (let i = 0; i < clusterRadius - 2; i++) {
+            for (let j = i; j < clusterRadius - 2; j++) {
+                this.drawHexagon(hexCoordsToCanvas(x + i, y - j, offsetX, offsetY))
+            }
+        }
 
-        // x = -1
-        // y = -3
-        // for (let i = 0; i < 3; i++) {
-        //     for (let j = i; j < 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(x - i, y + j, offsetX, offsetY))
-        //     }
-        // }
+        // Draw the northwest border triangle
+        x = -1
+        y = -1
+        for (let i = 0; i < clusterRadius - 2; i++) {
+            for (let j = i; j < clusterRadius - 2; j++) {
+                this.drawHexagon(hexCoordsToCanvas(x - i, y + j - (clusterRadius - 3), offsetX, offsetY))
+            }
+        }
 
-        // x = -2
-        // y = 1
-        // for (let i = 0; i < 3; i++) {
-        //     for (let j = i; j < 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
-        //     }
-        // }
-
-        // x = 3
-        // y = -4
-        // for (let i = 0; i < 3; i++) {
-        //     for (let j = i; j < 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
-        //     }
-        // }
-
-        // x = 3
-        // y = 1
-        // for (let i = 0; i < 3; i++) {
-        //     for (let j = i; j < 3; j++) {
-        //         this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
-        //     }
-        // }
+        // Draw the west border triangle
+        x = -2
+        y = 1
+        for (let i = 0; i < clusterRadius - 2; i++) {
+            for (let j = i; j < clusterRadius - 2; j++) {
+                this.drawHexagon(hexCoordsToCanvas(x - j, y + i, offsetX, offsetY))
+            }
+        }
     }
 
     drawHexagon(hexCoords) {
