@@ -6,15 +6,8 @@ class HexGame {
     posEl = null
     canvasEl = null
     canvasContext = null
-    webSocket = null
     offsetX = 0
     offsetY = 0
-
-    // Mouse X,Y coordinates on the HTML canvas
-    canvasCoords = {
-        posXCanvas: 0,
-        posYCanvas: 0
-    }
 
     // This player data. Coordinates in Hex
     playerState = {
@@ -27,6 +20,7 @@ class HexGame {
     // This aids an optimization to minimize the number
     // of state updates sent to the server.
     lastSentPlayerState = {
+        id: '',
         posXHex: -1,
         posYHex: -1
     }
@@ -39,7 +33,6 @@ class HexGame {
 
     constructor() {
         this.posEl = document.getElementById('position')
-        this.playerState.id = crypto.randomUUID()
 
         const canvas = document.getElementById('canvas')
         this.canvasEl = canvas
@@ -47,62 +40,10 @@ class HexGame {
 
         this.offsetX = (canvas.offsetWidth - r) / 2
         this.offsetY = (canvas.offsetHeight - r) / 2
-
-        const ws = new WebSocket(`ws://localhost:5001/ws?id=${this.playerState.id}`)
-        this.webSocket = ws
-
-        ws.onopen = () => {
-            this.beginLocalCanvasEventListeners()
-            this.beginSendTicker(120)
-        }
-
-        ws.onmessage = (event) => {
-            this.gameStateFromServer = JSON.parse(event.data)
-        }
-        
-        ws.onerror = (event) => {
-            console.log("ERROR")
-            console.log(event)
-        }
-        
-        ws.onclose = (event) => {
-            console.log("CLOSE")
-            console.log(event)
-        }
     }
 
-    beginLocalCanvasEventListeners() {    
-        this.canvasEl.addEventListener('mousemove', (e) => {
-            this.mouseCanvasCoords = {
-                ...this.mouseCanvasCoords,
-                posXCanvas: e.offsetX,
-                posYCanvas: e.offsetY
-            }
-    
-            let canvasX = this.mouseCanvasCoords.posXCanvas
-            let canvasY = this.mouseCanvasCoords.posYCanvas
-            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, this.offsetX, this.offsetY)
-            this.playerState = {
-                ...this.playerState,
-                posXHex: hexX,
-                posYHex: hexY
-            }
-        })
-    }
-
-    beginSendTicker(freq) {
-        setInterval(() => {
-            if(!_.isEqual(this.playerState, this.lastSentPlayerState)) {
-    
-                let gameMessage = {
-                    gameMessageType: 'playerstate',
-                    payload: JSON.stringify(this.playerState)
-                }
-    
-                this.webSocket.send(JSON.stringify(gameMessage))
-                this.lastSentPlayerState = this.playerState
-            }
-        }, 1000 / freq)
+    setPlayerId(id) {
+        this.playerState.id = id
     }
 
     setPositionEl(x, y) {
@@ -117,6 +58,10 @@ class HexGame {
         return this.canvasContext
     }
 
+    getCanvasElement() {
+        return this.canvasEl
+    }
+
     getThisPlayer() {
         let pSearch = this.gameStateFromServer.players.filter(p => p.id === this.playerState.id)
         if (pSearch.length) {
@@ -126,38 +71,62 @@ class HexGame {
         return null
     }
 
+    getThisPlayerState() {
+        return this.playerState
+    }
+
+    getLastSentPlayerState() {
+        return this.lastSentPlayerState
+    }
+
+    setLastSentPlayerState(playerState) {
+        this.lastSentPlayerState = playerState
+    }
+
+    setGameState(gameState) {
+        this.gameStateFromServer = gameState
+    }
+
     getOffset() {
         return [this.offsetX, this.offsetY]
+    }
+
+    setPlayerHexPosition(hexX, hexY) {
+        this.playerState = {
+            ...this.playerState,
+            posXHex: hexX,
+            posYHex: hexY
+        }
     }
 }
 
 class GameDrawer {
-    hexGame = null
+    game = null
 
     constructor(game) {
-        this.hexGame = game
+        this.game = game
         this.beginDrawTicker(120)
     }
 
     beginDrawTicker(freq) {
-        let canvasContext = this.hexGame.getCanvasContext()
+        let canvasContext = this.game.getCanvasContext()
         setInterval(() => {
             canvasContext.clearRect(0, 0, canvasContext.canvas.width, canvasContext.canvas.height)
             this.drawGrid(canvasContext)
 
-            let gameState = this.hexGame.getGameState()
+            let gameState = this.game.getGameState()
             this.drawGameState(canvasContext, gameState)
     
-            let thisPlayer = this.hexGame.getThisPlayer()
+            let thisPlayer = this.game.getThisPlayer()
             if (thisPlayer) {
-                this.hexGame.setPositionEl(thisPlayer.posXHex, thisPlayer.posYHex)
+                this.game.setPositionEl(thisPlayer.posXHex, thisPlayer.posYHex)
             }
         }, 1000 / freq)
     }
 
     drawGameState() {
-        const [offsetX, offsetY] = this.hexGame.getOffset()
-        let state = this.hexGame.getGameState()
+        const [offsetX, offsetY] = this.game.getOffset()
+        let state = this.game.getGameState()
         for (let i = 0; i < state.players.length; i++) {
             const element = state.players[i];
             this.fillHexagon(hexCoordsToCanvas(element.posXHex, element.posYHex, offsetX, offsetY))
@@ -165,7 +134,7 @@ class GameDrawer {
     }
 
     drawGrid() {
-        const [offsetX, offsetY] = this.hexGame.getOffset()
+        const [offsetX, offsetY] = this.game.getOffset()
 
         let clusterRadius = 7
 
@@ -249,7 +218,7 @@ class GameDrawer {
     }
 
     drawHexagon(hexCoords) {
-        let canvasContext = this.hexGame.getCanvasContext()
+        let canvasContext = this.game.getCanvasContext()
         const [hexX, hexY] = hexCoords
     
         canvasContext.beginPath()
@@ -261,7 +230,7 @@ class GameDrawer {
     }
 
     fillHexagon(hexCoords) {
-        let canvasContext = this.hexGame.getCanvasContext()
+        let canvasContext = this.game.getCanvasContext()
         const [hexX, hexY] = hexCoords
     
         canvasContext.fillStyle = '#AAA'
@@ -276,9 +245,83 @@ class GameDrawer {
     
 }
 
+class InputListener {
+    game = null
+
+    hexX = 0
+    hexY = 0
+
+    constructor(game) {
+        this.game = game
+        this.beginLocalCanvasEventListeners()
+    }
+
+    beginLocalCanvasEventListeners() {
+        const [offsetX, offsetY] = this.game.getOffset()
+
+        this.game.getCanvasElement().addEventListener('mousemove', (e) => {    
+            let canvasX = e.offsetX
+            let canvasY = e.offsetY
+            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
+            this.game.setPlayerHexPosition(hexX, hexY)
+        })
+    }
+}
+
+class ServerComm {
+    game = null
+    webSocket = null
+
+    constructor(game) {
+        this.game = game
+
+        let playerId = crypto.randomUUID()
+        this.game.setPlayerId(playerId)
+
+        const ws = new WebSocket(`ws://localhost:5001/ws?id=${playerId}`)
+        this.webSocket = ws
+
+        ws.onopen = () => {
+            this.beginSendTicker(120)
+        }
+
+        ws.onmessage = (event) => {
+            this.game.setGameState(JSON.parse(event.data))
+        }
+        
+        ws.onerror = (event) => {
+            console.log("ERROR")
+            console.log(event)
+        }
+        
+        ws.onclose = (event) => {
+            console.log("CLOSE")
+            console.log(event)
+        }
+    }
+
+    beginSendTicker(freq) {
+        setInterval(() => {
+            let playerState = this.game.getThisPlayerState()
+            if(!_.isEqual(playerState, this.game.getLastSentPlayerState())) {
+    
+                let gameMessage = {
+                    gameMessageType: 'playerstate',
+                    payload: JSON.stringify(playerState)
+                }
+    
+                this.webSocket.send(JSON.stringify(gameMessage))
+                this.game.setLastSentPlayerState(playerState)
+            }
+        }, 1000 / freq)
+    }
+}
+
 function init() {
     Game = new HexGame()
     GameDrawer = new GameDrawer(Game)
+    InputListener = new InputListener(Game)
+    Server = new ServerComm(Game)
 }
 
 function hexCoordsToCanvas(hexX, hexY, offsetX, offsetY) {
