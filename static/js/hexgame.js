@@ -4,8 +4,16 @@ const r = 15
 
 class HexGame {
     posEl = null
+    wEl = null
+    aEl = null
+    sEl = null
+    dEl = null
+
+    pressedKeys = {}
+
     canvasEl = null
     canvasContext = null
+
     offsetX = 0
     offsetY = 0
 
@@ -33,6 +41,10 @@ class HexGame {
 
     constructor() {
         this.posEl = document.getElementById('position')
+        this.wEl = document.getElementById('KeyW')
+        this.aEl = document.getElementById('KeyA')
+        this.sEl = document.getElementById('KeyS')
+        this.dEl = document.getElementById('KeyD')
 
         const canvas = document.getElementById('canvas')
         this.canvasEl = canvas
@@ -40,6 +52,17 @@ class HexGame {
 
         this.offsetX = (canvas.offsetWidth - r) / 2
         this.offsetY = (canvas.offsetHeight - r) / 2
+    }
+
+    getPressedKeys() {
+        return { ...this.pressedKeys }
+    }
+
+    setPressedKey(keyCode, isPressed) {
+        this.pressedKeys = {
+            ...this.pressedKeys,
+            [keyCode]: isPressed
+        }
     }
 
     setPlayerId(id) {
@@ -100,6 +123,34 @@ class HexGame {
     }
 }
 
+// class GameState {
+//     // This player data. Coordinates in Hex
+//     playerState = {
+//         id: '',
+//         posXHex: 0,
+//         posYHex: 0
+//     }
+
+//     // The last state of this player sent to the server.
+//     // This aids an optimization to minimize the number
+//     // of state updates sent to the server.
+//     lastSentPlayerState = {
+//         id: '',
+//         posXHex: -1,
+//         posYHex: -1
+//     }
+
+//     // All the relevant game data sent from the server.
+//     // This gets regularly updated from the socket connection.
+//     gameStateFromServer = {
+//         players: []
+//     }
+
+//     constructor() {
+
+//     }
+// }
+
 class GameDrawer {
     game = null
 
@@ -130,6 +181,14 @@ class GameDrawer {
         for (let i = 0; i < state.players.length; i++) {
             const element = state.players[i];
             this.fillHexagon(hexCoordsToCanvas(element.posXHex, element.posYHex, offsetX, offsetY))
+        }
+
+        let kp = this.game.getPressedKeys()
+        for (const [key, value] of Object.entries(kp)) {
+            let el = document.getElementById(key)
+            if (el) {
+                el.textContent = `${value}`
+            }
         }
     }
 
@@ -248,9 +307,6 @@ class GameDrawer {
 class InputListener {
     game = null
 
-    hexX = 0
-    hexY = 0
-
     constructor(game) {
         this.game = game
         this.beginLocalCanvasEventListeners()
@@ -264,6 +320,14 @@ class InputListener {
             let canvasY = e.offsetY
             const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
             this.game.setPlayerHexPosition(hexX, hexY)
+        })
+
+        window.addEventListener('keydown', (event) => {
+            this.game.setPressedKey(event.code, true)
+        })
+
+        window.addEventListener('keyup', (event) => {
+            this.game.setPressedKey(event.code, false)
         })
     }
 }
