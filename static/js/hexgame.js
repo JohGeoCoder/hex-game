@@ -89,7 +89,7 @@ class GameState {
         this.serverState = state
     }
 
-    setPlayerPosition(hexX, hexY) {
+    setHomePlayerPosition(hexX, hexY) {
         this.homePlayer = {
             ...this.homePlayer,
             posXHex: hexX,
@@ -269,12 +269,12 @@ class InputListener {
     beginLocalCanvasEventListeners() {
         const [offsetX, offsetY] = this.game.getOffset()
 
-        this.game.getCanvasElement().addEventListener('mousemove', (e) => {    
-            let canvasX = e.offsetX
-            let canvasY = e.offsetY
-            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
-            this.gameState.setPlayerPosition(hexX, hexY)
-        })
+        // this.game.getCanvasElement().addEventListener('mousemove', (e) => {    
+        //     let canvasX = e.offsetX
+        //     let canvasY = e.offsetY
+        //     const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
+        //     this.gameState.setHomePlayerPosition(hexX, hexY)
+        // })
 
         window.addEventListener('keydown', (event) => {
             this.gameState.setPressedKey(event.code, true)
@@ -282,6 +282,23 @@ class InputListener {
 
         window.addEventListener('keyup', (event) => {
             this.gameState.setPressedKey(event.code, false)
+        })
+
+        window.addEventListener('keypress', (event) => {
+            console.log(event.code)
+            let p = this.gameState.getHomePlayerLocalState()
+            if (event.code === 'KeyW') {
+                this.gameState.setHomePlayerPosition(p.posXHex, p.posYHex - 1)
+            }
+            if (event.code === 'KeyA') {
+                this.gameState.setHomePlayerPosition(p.posXHex - 1, p.posYHex)
+            }
+            if (event.code === 'KeyS') {
+                this.gameState.setHomePlayerPosition(p.posXHex, p.posYHex + 1)
+            }
+            if (event.code === 'KeyD') {
+                this.gameState.setHomePlayerPosition(p.posXHex + 1, p.posYHex)
+            }
         })
     }
 }
