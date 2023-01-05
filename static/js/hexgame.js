@@ -1,6 +1,6 @@
 
 const a = 2 * Math.PI / 6
-const r = 25
+const r = 15
 
 class HexGame {
     posEl = null
@@ -167,18 +167,18 @@ class GameDrawer {
     drawGrid() {
         const [offsetX, offsetY] = this.hexGame.getOffset()
 
-        let clusterRadius = 4
+        let clusterRadius = 7
 
-        let radialDistance = (clusterRadius - 1) * 2
+        let radialDistance = (clusterRadius - 1)
 
         const adjacentClusterCenters = [
             [0, 0],
-            [0, -radialDistance],
-            [0, radialDistance],
-            [-radialDistance, 0],
-            [radialDistance, 0],
-            [-radialDistance, radialDistance],
-            [radialDistance, -radialDistance]
+            [-radialDistance, -radialDistance],
+            [radialDistance, 2 * -radialDistance],
+            [2 * radialDistance, -radialDistance],
+            [radialDistance, radialDistance],
+            [-radialDistance, 2 * radialDistance],
+            [2 * -radialDistance, radialDistance]
         ]
 
         for (let w = 0; w < adjacentClusterCenters.length; w++) {
@@ -270,8 +270,8 @@ class GameDrawer {
         for (var i = 0; i < 6; i++) {
             canvasContext.lineTo(hexX + r * Math.cos(a * i), hexY + r * Math.sin(a * i));
         }
-        canvasContext.fill()
         canvasContext.closePath()
+        canvasContext.fill()
     }
     
 }
