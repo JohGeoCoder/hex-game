@@ -3,13 +3,6 @@ const a = 2 * Math.PI / 6
 const r = 15
 
 class HexGame {
-    posEl = null
-    wEl = null
-    aEl = null
-    sEl = null
-    dEl = null
-
-    pressedKeys = {}
 
     canvasEl = null
     canvasContext = null
@@ -17,41 +10,47 @@ class HexGame {
     offsetX = 0
     offsetY = 0
 
-    // This player data. Coordinates in Hex
-    playerState = {
-        id: '',
-        posXHex: 0,
-        posYHex: 0
-    }
-
-    // The last state of this player sent to the server.
-    // This aids an optimization to minimize the number
-    // of state updates sent to the server.
-    lastSentPlayerState = {
-        id: '',
-        posXHex: -1,
-        posYHex: -1
-    }
-
-    // All the relevant game data sent from the server.
-    // This gets regularly updated from the socket connection.
-    gameStateFromServer = {
-        players: []
-    }
-
     constructor() {
-        this.posEl = document.getElementById('position')
-        this.wEl = document.getElementById('KeyW')
-        this.aEl = document.getElementById('KeyA')
-        this.sEl = document.getElementById('KeyS')
-        this.dEl = document.getElementById('KeyD')
-
         const canvas = document.getElementById('canvas')
         this.canvasEl = canvas
         this.canvasContext = canvas.getContext('2d')
 
         this.offsetX = (canvas.offsetWidth - r) / 2
         this.offsetY = (canvas.offsetHeight - r) / 2
+    }
+
+    getCanvasContext() {
+        return this.canvasContext
+    }
+
+    getCanvasElement() {
+        return this.canvasEl
+    }    
+
+    getOffset() {
+        return [this.offsetX, this.offsetY]
+    }
+}
+
+class GameState {
+    // This player data. Coordinates in Hex
+    homePlayer = {
+        id: '',
+        posXHex: 0,
+        posYHex: 0
+    }
+
+    // All the relevant game data sent from the server.
+    // This gets regularly updated from the socket connection.
+    serverState = {
+        players: []
+    }
+
+    pressedKeys = {}
+
+    constructor() {
+        let playerId = crypto.randomUUID()
+        this.homePlayer.id = playerId
     }
 
     getPressedKeys() {
@@ -65,97 +64,47 @@ class HexGame {
         }
     }
 
-    setPlayerId(id) {
-        this.playerState.id = id
+    getHomePlayerId() {
+        return this.homePlayer.id
     }
 
-    setPositionEl(x, y) {
-        this.posEl.textContent = `{${x},${y}}`
+    getServerState() {
+        return { ...this.serverState }
     }
 
-    getGameState() {
-        return { ...this.gameStateFromServer }
-    }
-
-    getCanvasContext() {
-        return this.canvasContext
-    }
-
-    getCanvasElement() {
-        return this.canvasEl
-    }
-
-    getThisPlayer() {
-        let pSearch = this.gameStateFromServer.players.filter(p => p.id === this.playerState.id)
+    getHomePlayerServerState() {
+        let pSearch = this.serverState.players.filter(p => p.id === this.homePlayer.id)
         if (pSearch.length) {
-            return pSearch[0]
+            return { ...pSearch[0] }
         }
 
         return null
     }
 
-    getThisPlayerState() {
-        return this.playerState
+    getHomePlayerLocalState() {
+        return { ...this.homePlayer }
     }
 
-    getLastSentPlayerState() {
-        return this.lastSentPlayerState
+    setServerState(state) {
+        this.serverState = state
     }
 
-    setLastSentPlayerState(playerState) {
-        this.lastSentPlayerState = playerState
-    }
-
-    setGameState(gameState) {
-        this.gameStateFromServer = gameState
-    }
-
-    getOffset() {
-        return [this.offsetX, this.offsetY]
-    }
-
-    setPlayerHexPosition(hexX, hexY) {
-        this.playerState = {
-            ...this.playerState,
+    setPlayerPosition(hexX, hexY) {
+        this.homePlayer = {
+            ...this.homePlayer,
             posXHex: hexX,
             posYHex: hexY
         }
     }
 }
 
-// class GameState {
-//     // This player data. Coordinates in Hex
-//     playerState = {
-//         id: '',
-//         posXHex: 0,
-//         posYHex: 0
-//     }
-
-//     // The last state of this player sent to the server.
-//     // This aids an optimization to minimize the number
-//     // of state updates sent to the server.
-//     lastSentPlayerState = {
-//         id: '',
-//         posXHex: -1,
-//         posYHex: -1
-//     }
-
-//     // All the relevant game data sent from the server.
-//     // This gets regularly updated from the socket connection.
-//     gameStateFromServer = {
-//         players: []
-//     }
-
-//     constructor() {
-
-//     }
-// }
-
 class GameDrawer {
     game = null
+    gameState = null
 
-    constructor(game) {
+    constructor(game, gameState) {
         this.game = game
+        this.gameState = gameState
         this.beginDrawTicker(120)
     }
 
@@ -165,26 +114,29 @@ class GameDrawer {
             canvasContext.clearRect(0, 0, canvasContext.canvas.width, canvasContext.canvas.height)
             this.drawGrid(canvasContext)
 
-            let gameState = this.game.getGameState()
-            this.drawGameState(canvasContext, gameState)
-    
-            let thisPlayer = this.game.getThisPlayer()
-            if (thisPlayer) {
-                this.game.setPositionEl(thisPlayer.posXHex, thisPlayer.posYHex)
-            }
+            let serverState = this.gameState.getServerState()
+            this.drawServerState(serverState)
+
+            let pressedKeys = this.gameState.getPressedKeys()
+            this.drawLocalState(pressedKeys)
         }, 1000 / freq)
     }
 
-    drawGameState() {
+    drawServerState(serverState) {
         const [offsetX, offsetY] = this.game.getOffset()
-        let state = this.game.getGameState()
-        for (let i = 0; i < state.players.length; i++) {
-            const element = state.players[i];
+        for (let i = 0; i < serverState.players.length; i++) {
+            const element = serverState.players[i];
             this.fillHexagon(hexCoordsToCanvas(element.posXHex, element.posYHex, offsetX, offsetY))
         }
+        
+        let homePlayer = this.gameState.getHomePlayerServerState()
+        if (homePlayer) {
+            document.getElementById('position').textContent = `{${homePlayer.posXHex},${homePlayer.posYHex}}`
+        }
+    }
 
-        let kp = this.game.getPressedKeys()
-        for (const [key, value] of Object.entries(kp)) {
+    drawLocalState(pressedKeys) {
+        for (const [key, value] of Object.entries(pressedKeys)) {
             let el = document.getElementById(key)
             if (el) {
                 el.textContent = `${value}`
@@ -306,9 +258,11 @@ class GameDrawer {
 
 class InputListener {
     game = null
+    gameState = null
 
-    constructor(game) {
+    constructor(game, gameState) {
         this.game = game
+        this.gameState = gameState
         this.beginLocalCanvasEventListeners()
     }
 
@@ -319,28 +273,38 @@ class InputListener {
             let canvasX = e.offsetX
             let canvasY = e.offsetY
             const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
-            this.game.setPlayerHexPosition(hexX, hexY)
+            this.gameState.setPlayerPosition(hexX, hexY)
         })
 
         window.addEventListener('keydown', (event) => {
-            this.game.setPressedKey(event.code, true)
+            this.gameState.setPressedKey(event.code, true)
         })
 
         window.addEventListener('keyup', (event) => {
-            this.game.setPressedKey(event.code, false)
+            this.gameState.setPressedKey(event.code, false)
         })
     }
 }
 
 class ServerComm {
     game = null
+    gameState = null
     webSocket = null
 
-    constructor(game) {
-        this.game = game
+    // The last state of this player sent to the server.
+    // This aids an optimization to minimize the number
+    // of state updates sent to the server.
+    lastSentHomePlayer = {
+        id: '',
+        posXHex: -1,
+        posYHex: -1
+    }
 
-        let playerId = crypto.randomUUID()
-        this.game.setPlayerId(playerId)
+    constructor(game, gameState) {
+        this.game = game
+        this.gameState = gameState
+        
+        let playerId = this.gameState.getHomePlayerId()
 
         const ws = new WebSocket(`ws://localhost:5001/ws?id=${playerId}`)
         this.webSocket = ws
@@ -350,7 +314,7 @@ class ServerComm {
         }
 
         ws.onmessage = (event) => {
-            this.game.setGameState(JSON.parse(event.data))
+            this.gameState.setServerState(JSON.parse(event.data))
         }
         
         ws.onerror = (event) => {
@@ -366,26 +330,31 @@ class ServerComm {
 
     beginSendTicker(freq) {
         setInterval(() => {
-            let playerState = this.game.getThisPlayerState()
-            if(!_.isEqual(playerState, this.game.getLastSentPlayerState())) {
+            let homePlayerLocalState = this.gameState.getHomePlayerLocalState()
+            if(!_.isEqual(homePlayerLocalState, this.lastSentHomePlayer)) {
     
                 let gameMessage = {
                     gameMessageType: 'playerstate',
-                    payload: JSON.stringify(playerState)
+                    payload: JSON.stringify(homePlayerLocalState)
                 }
     
                 this.webSocket.send(JSON.stringify(gameMessage))
-                this.game.setLastSentPlayerState(playerState)
+                this.lastSentHomePlayer = homePlayerLocalState
             }
         }, 1000 / freq)
+    }
+
+    getLastSentHomePlayerState() {
+        return this.lastSentHomePlayer
     }
 }
 
 function init() {
     Game = new HexGame()
-    GameDrawer = new GameDrawer(Game)
-    InputListener = new InputListener(Game)
-    Server = new ServerComm(Game)
+    State = new GameState()
+    Drawer = new GameDrawer(Game, State)
+    IListener = new InputListener(Game, State)
+    Server = new ServerComm(Game, State)
 }
 
 function hexCoordsToCanvas(hexX, hexY, offsetX, offsetY) {
