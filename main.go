@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"hexgridgame.com/config"
@@ -14,20 +15,36 @@ import (
 	"hexgridgame.com/models"
 )
 
-const (
-	serverHost = "localhost"
-	serverPort = "5001"
-)
-
 func main() {
 	ctx := context.Background()
 
 	//Start listening for event messages
-	buf := eventbuffer.NewQueueBuffer()
-	buf.StartProcessing()
+	incomingBuffer := eventbuffer.NewRedisBuffer[[]byte](ctx)
+	incomingBuffer.StartProcessing()
 
-	game := gamedata.NewGame(buf)
-	game.StartProcessing(processMessageFunc)
+	outgoingBuffer := eventbuffer.NewQueueBuffer[byte]()
+	outgoingBuffer.StartProcessing()
+
+	game := gamedata.NewGame(incomingBuffer, outgoingBuffer)
+	game.StartProcessingIncoming(processMessageFunc)
+	game.StartProcessingOutgoing()
+
+	ticker := time.NewTicker(time.Second)
+	done := make(chan bool)
+	defer func() {
+		done <- true
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				game.ScheduleGameUpdate()
+			}
+		}
+	}()
 
 	// Set up HTTP and Socket routes
 	setupRoutes(ctx, game)
@@ -39,11 +56,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	done <- true
 }
 
 // This is the callback function that runs for every message
 // received by the buffer.
-func processMessageFunc(game *gamedata.GameDataInternal, msg *eventbuffer.MessageMeta) error {
+func processMessageFunc(game *gamedata.Game, msg *eventbuffer.MessageMeta[[]byte]) error {
 	gm := &models.GameMessage{}
 	err := json.Unmarshal(msg.Payload, gm)
 	if err != nil {
@@ -51,22 +70,25 @@ func processMessageFunc(game *gamedata.GameDataInternal, msg *eventbuffer.Messag
 		return err
 	}
 
-	if gm.GameMessageType == "playerstate" {
-		p := &models.Player{}
+	switch gm.GameMessageType {
+	case "playerposition":
+		p := &models.PlayerPosition{}
 		err := json.Unmarshal([]byte(gm.Payload), p)
 		if err != nil {
 			fmt.Println("Player State Unmarshal error", err)
 			return err
 		}
 
-		game.UpdatePlayer(p)
-		game.NotifyPlayersGameState()
+		game.UpdatePlayer(p.ID, gamedata.WithPosition(models.Position{
+			PosX: p.PosX,
+			PosY: p.PosY,
+		}))
 	}
 
 	return nil
 }
 
-func setupRoutes(ctx context.Context, game *gamedata.GameDataInternal) {
+func setupRoutes(ctx context.Context, game *gamedata.Game) {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 	http.HandleFunc("/ws", getWsEndpointFunc(ctx, game))
@@ -74,7 +96,7 @@ func setupRoutes(ctx context.Context, game *gamedata.GameDataInternal) {
 
 // getWsEndpointfunc returns a wrapped HTTP function that responds to
 // WebSocket requests.
-func getWsEndpointFunc(ctx context.Context, game *gamedata.GameDataInternal) func(http.ResponseWriter, *http.Request) {
+func getWsEndpointFunc(ctx context.Context, game *gamedata.Game) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var upgrader = websocket.Upgrader{
 			ReadBufferSize:  1024,

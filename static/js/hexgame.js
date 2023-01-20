@@ -105,7 +105,7 @@ class GameDrawer {
     constructor(game, gameState) {
         this.game = game
         this.gameState = gameState
-        this.beginDrawTicker(120)
+        this.beginDrawTicker(30)
     }
 
     beginDrawTicker(freq) {
@@ -116,9 +116,6 @@ class GameDrawer {
 
             let serverState = this.gameState.getServerState()
             this.drawServerState(serverState)
-
-            let pressedKeys = this.gameState.getPressedKeys()
-            this.drawLocalState(pressedKeys)
         }, 1000 / freq)
     }
 
@@ -132,15 +129,6 @@ class GameDrawer {
         let homePlayer = this.gameState.getHomePlayerServerState()
         if (homePlayer) {
             document.getElementById('position').textContent = `{${homePlayer.posXHex},${homePlayer.posYHex}}`
-        }
-    }
-
-    drawLocalState(pressedKeys) {
-        for (const [key, value] of Object.entries(pressedKeys)) {
-            let el = document.getElementById(key)
-            if (el) {
-                el.textContent = `${value}`
-            }
         }
     }
 
@@ -269,12 +257,12 @@ class InputListener {
     beginLocalCanvasEventListeners() {
         const [offsetX, offsetY] = this.game.getOffset()
 
-        // this.game.getCanvasElement().addEventListener('mousemove', (e) => {    
-        //     let canvasX = e.offsetX
-        //     let canvasY = e.offsetY
-        //     const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
-        //     this.gameState.setHomePlayerPosition(hexX, hexY)
-        // })
+        this.game.getCanvasElement().addEventListener('mousemove', (e) => {    
+            let canvasX = e.offsetX
+            let canvasY = e.offsetY
+            const [hexX, hexY] = canvasCoordsToHex(canvasX, canvasY, offsetX, offsetY)
+            this.gameState.setHomePlayerPosition(hexX, hexY)
+        })
 
         window.addEventListener('keydown', (event) => {
             this.gameState.setPressedKey(event.code, true)
@@ -284,22 +272,22 @@ class InputListener {
             this.gameState.setPressedKey(event.code, false)
         })
 
-        window.addEventListener('keypress', (event) => {
-            console.log(event.code)
-            let p = this.gameState.getHomePlayerLocalState()
-            if (event.code === 'KeyW') {
-                this.gameState.setHomePlayerPosition(p.posXHex, p.posYHex - 1)
-            }
-            if (event.code === 'KeyA') {
-                this.gameState.setHomePlayerPosition(p.posXHex - 1, p.posYHex)
-            }
-            if (event.code === 'KeyS') {
-                this.gameState.setHomePlayerPosition(p.posXHex, p.posYHex + 1)
-            }
-            if (event.code === 'KeyD') {
-                this.gameState.setHomePlayerPosition(p.posXHex + 1, p.posYHex)
-            }
-        })
+        // window.addEventListener('keypress', (event) => {
+        //     console.log(event.code)
+        //     let p = this.gameState.getHomePlayerLocalState()
+        //     if (event.code === 'KeyW') {
+        //         this.gameState.setHomePlayerPosition(p.posXHex, p.posYHex - 1)
+        //     }
+        //     if (event.code === 'KeyA') {
+        //         this.gameState.setHomePlayerPosition(p.posXHex - 1, p.posYHex)
+        //     }
+        //     if (event.code === 'KeyS') {
+        //         this.gameState.setHomePlayerPosition(p.posXHex, p.posYHex + 1)
+        //     }
+        //     if (event.code === 'KeyD') {
+        //         this.gameState.setHomePlayerPosition(p.posXHex + 1, p.posYHex)
+        //     }
+        // })
     }
 }
 
@@ -327,7 +315,7 @@ class ServerComm {
         this.webSocket = ws
 
         ws.onopen = () => {
-            this.beginSendTicker(120)
+            this.beginSendTicker(30)
         }
 
         ws.onmessage = (event) => {
@@ -351,7 +339,7 @@ class ServerComm {
             if(!_.isEqual(homePlayerLocalState, this.lastSentHomePlayer)) {
     
                 let gameMessage = {
-                    gameMessageType: 'playerstate',
+                    gameMessageType: 'playerposition',
                     payload: JSON.stringify(homePlayerLocalState)
                 }
     
@@ -366,12 +354,22 @@ class ServerComm {
     }
 }
 
+class UIActions {
+    constructor() {
+        let nameEl = document.getElementById("username")
+        nameEl.addEventListener('keyup', (event) => {
+            console.log(event.target.value)
+        })
+    }
+}
+
 function init() {
     Game = new HexGame()
     State = new GameState()
     Drawer = new GameDrawer(Game, State)
     IListener = new InputListener(Game, State)
     Server = new ServerComm(Game, State)
+    Actions = new UIActions()
 }
 
 function hexCoordsToCanvas(hexX, hexY, offsetX, offsetY) {

@@ -9,27 +9,37 @@ import (
 	"hexgridgame.com/models"
 )
 
-type GameDataInternal struct {
-	players map[string]*PlayerDataInternal
-	buf     eventbuffer.Buffer
+type Game struct {
+	players     map[string]*PlayerData
+	computers   map[string]*ComputerData
+	bufIncoming eventbuffer.Buffer[[]byte]
+	bufOutgoing eventbuffer.Buffer[byte]
 }
 
-type PlayerDataInternal struct {
+type PlayerData struct {
 	ID         string
 	Connection *websocket.Conn
 	PosX       int
 	PosY       int
 }
 
-func NewGame(buf eventbuffer.Buffer) *GameDataInternal {
-	return &GameDataInternal{
-		players: make(map[string]*PlayerDataInternal),
-		buf:     buf,
+type ComputerData struct {
+	ID   string
+	PosX float64
+	PosY float64
+}
+
+func NewGame(incomingBuffer eventbuffer.Buffer[[]byte], outgoingBuffer eventbuffer.Buffer[byte]) *Game {
+	return &Game{
+		players:     make(map[string]*PlayerData),
+		computers:   make(map[string]*ComputerData),
+		bufIncoming: incomingBuffer,
+		bufOutgoing: outgoingBuffer,
 	}
 }
 
-func (g *GameDataInternal) AddPlayer(id string, conn *websocket.Conn) {
-	g.players[id] = &PlayerDataInternal{
+func (g *Game) AddPlayer(id string, conn *websocket.Conn) {
+	g.players[id] = &PlayerData{
 		ID:         id,
 		Connection: conn,
 	}
@@ -43,22 +53,32 @@ func (g *GameDataInternal) AddPlayer(id string, conn *websocket.Conn) {
 				return
 			}
 
-			msg := &eventbuffer.MessageMeta{
+			msg := &eventbuffer.MessageMeta[[]byte]{
 				Payload: p,
 			}
 
-			g.buf.Publish(msg)
+			g.bufIncoming.Publish(msg)
 		}
 	}()
 }
 
-func (g *GameDataInternal) UpdatePlayer(p *models.Player) {
-	iPlayerData := g.players[p.ID]
-	iPlayerData.PosX = p.PosX
-	iPlayerData.PosY = p.PosY
+func (g *Game) UpdatePlayer(playerID string, opts ...func(*PlayerData)) {
+
+	player := g.players[playerID]
+
+	for _, o := range opts {
+		o(player)
+	}
 }
 
-func (g *GameDataInternal) NotifyPlayersGameState() {
+func WithPosition(pos models.Position) func(*PlayerData) {
+	return func(pd *PlayerData) {
+		pd.PosX = pos.PosX
+		pd.PosY = pos.PosY
+	}
+}
+
+func (g *Game) NotifyPlayersGameState() {
 	st := models.GameState{
 		Players: []models.Player{},
 	}
@@ -82,18 +102,37 @@ func (g *GameDataInternal) NotifyPlayersGameState() {
 	}
 }
 
-func (g *GameDataInternal) StartProcessing(f func(game *GameDataInternal, f *eventbuffer.MessageMeta) error) {
+func (g *Game) ScheduleGameUpdate() {
+	g.bufOutgoing.Publish(&eventbuffer.MessageMeta[byte]{})
+}
+
+func (g *Game) StartProcessingIncoming(f func(*Game, *eventbuffer.MessageMeta[[]byte]) error) {
+
+	// Begin reading messages from the incoming buffer
 	go func() {
-		mmChan := g.buf.StartProcessing()
+		mmChan := g.bufIncoming.StartProcessing()
 
 		for mm := range mmChan {
 
 			if err := f(g, mm); err != nil {
-				g.buf.Nack(mm, err)
+				g.bufIncoming.Nack(mm, err)
 				return
 			}
 
-			g.buf.Ack(mm)
+			g.bufIncoming.Ack(mm)
+		}
+	}()
+}
+
+func (g *Game) StartProcessingOutgoing() {
+	// Begin processing the messages from the outgoing buffer
+	go func() {
+		gsChan := g.bufOutgoing.StartProcessing()
+
+		for mm := range gsChan {
+
+			g.NotifyPlayersGameState()
+			g.bufOutgoing.Ack(mm)
 		}
 	}()
 }

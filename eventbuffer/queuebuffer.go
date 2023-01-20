@@ -2,24 +2,21 @@ package eventbuffer
 
 import "hexgridgame.com/queue"
 
-type QueueBuffer struct {
-	queue queue.Queue[MessageMeta]
+type QueueBuffer[T any] struct {
+	GenericBuffer[T]
+	queue queue.Queue[MessageMeta[T]]
 }
 
-func (q *QueueBuffer) Ack(msg *MessageMeta) {
+func (q *QueueBuffer[T]) Ack(msg *MessageMeta[T]) {
 	return
 }
 
-func (q *QueueBuffer) Nack(msg *MessageMeta, err error) {
+func (q *QueueBuffer[T]) Publish(msg *MessageMeta[T]) {
 	q.queue.Enqueue(msg)
 }
 
-func (q *QueueBuffer) Publish(msg *MessageMeta) {
-	q.queue.Enqueue(msg)
-}
-
-func (q *QueueBuffer) StartProcessing() <-chan *MessageMeta {
-	ch := make(chan *MessageMeta, 50)
+func (q *QueueBuffer[T]) StartProcessing() <-chan *MessageMeta[T] {
+	ch := make(chan *MessageMeta[T], 50)
 
 	go func() {
 		for {
@@ -32,8 +29,8 @@ func (q *QueueBuffer) StartProcessing() <-chan *MessageMeta {
 	return ch
 }
 
-func NewQueueBuffer() Buffer {
-	return &QueueBuffer{
-		queue: &queue.ThreadSafeQueue[MessageMeta]{},
+func NewQueueBuffer[T any]() Buffer[T] {
+	return &QueueBuffer[T]{
+		queue: &queue.ThreadSafeQueue[MessageMeta[T]]{},
 	}
 }
