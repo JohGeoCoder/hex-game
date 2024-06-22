@@ -10,8 +10,9 @@ import (
 // with defaults
 type Config struct {
 	ServerHost         string `env:"SERVER_HOST" envDefault:"localhost:5001"`
+	ServerPort         string `env:"SERVER_PORT" envDefault:"5001"`
 	RedisPubSubChannel string `env:"REDIS_PUBSUB_CHANNEL" envDefault:"channel1"`
-	RedisAddress       string `env:"REDIS_ADDRESS" envDefault:"69.164.219.100:6379"`
+	RedisAddress       string `env:"REDIS_ADDRESS" envDefault:"localhost:6379"`
 }
 
 var cfg Config

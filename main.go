@@ -29,7 +29,7 @@ func main() {
 	game.StartProcessingIncoming(processMessageFunc)
 	game.StartProcessingOutgoing()
 
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Second / 60)
 	done := make(chan bool)
 	defer func() {
 		done <- true
@@ -51,8 +51,8 @@ func main() {
 
 	cfg := config.Get()
 
-	log.Printf("Listening on %s", cfg.ServerHost)
-	err := http.ListenAndServe(cfg.ServerHost, nil)
+	log.Printf("Listening on port %s", cfg.ServerPort)
+	err := http.ListenAndServe(fmt.Sprintf("localhost:%s", cfg.ServerPort), nil)
 	if err != nil {
 		log.Fatal(err)
 	}

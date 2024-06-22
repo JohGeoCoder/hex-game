@@ -1,0 +1,39 @@
+# Config file for [Air](https://github.com/cosmtrek/air) in TOML format
+
+# This file is used while standing up the project with the 'make local' command.
+# The definitions below set up "hot reloading" for when developers update code
+# while the debugger is running.
+
+# Working directory
+# . or absolute path, please note that the directories following must be under root.
+# The value of '.' is the current working directory of the docker container runnings
+# this project. The container's working directory is controlled by the Dockerfile
+# with the WORKDIR command.
+root = "."
+tmp_dir = ".air"
+
+# Set the file change polling interval. This is necessary for running on Windows
+# due to how filesystem events are propagated from the host to containers.
+polling_interval = 3000
+
+# Just plain old shell command. You could use `make` as well.
+# This is the build command that runs when code changes are detected.
+[build]
+cmd = "go build -gcflags='all=-N -l' -o ./.air/hexgridgame ."
+
+# Binary file yields from `cmd`.
+bin = "./.air/hexgridgame"
+
+# Customize binary.
+# Runs the debugger in the container and exposes the debug artifacts through a port.
+# TODO: Fix the bug where the debugger needs to be manually re-attached after each
+# code change. The workaround is just to simply restart the debugger in VS Code.
+full_bin = "dlv exec --accept-multiclient --log=true --log-output=debugger,debuglineerr,gdbwire,lldbout --headless=true --continue --listen=:2345 --api-version=2 ./.air/hexgridgame"
+
+# Watch these filename extensions for hot reloading.
+include_ext = ["go"]
+
+# Enable change polling. This is necessary for running on Windows
+# due to how filesystem events are propagated from the host to containers.
+[watch]
+polling = true

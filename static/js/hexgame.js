@@ -315,7 +315,7 @@ class ServerComm {
         this.webSocket = ws
 
         ws.onopen = () => {
-            this.beginSendTicker(30)
+            this.beginSendTicker(60)
         }
 
         ws.onmessage = (event) => {
